@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gaussian Entropy & Cross-Entropy Visualizer</title>
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <style>
+    :root { --bg:#0b1020; --card:#111a33; --text:#e9eefc; --muted:#a9b3d6; --accent:#6aa6ff; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 18px; }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    p { margin: 0 0 16px; color: var(--muted); line-height: 1.35; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 980px) { .grid { grid-template-columns: 380px 1fr; } }
+    .card { background: var(--card); border-radius: 16px; padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+    .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .row > * { flex: 1 1 auto; }
+    label { display:flex; align-items:center; gap: 8px; font-size: 13px; color: var(--text); }
+    .small { font-size: 12px; color: var(--muted); }
+    .ctrl { margin: 10px 0 12px; }
+    .ctrl .hdr { display:flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; }
+    input[type="checkbox"] { transform: translateY(1px); }
+    .nums { display:grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+    .nums .box { background: rgba(255,255,255,.04); border-radius: 12px; padding: 10px; }
+    .nums .k { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .nums .v { font-size: 15px; font-variant-numeric: tabular-nums; }
+    .plots { display:grid; grid-template-columns: 1fr; gap: 14px; }
+    .plot { height: 360px; }
+    .divider { height:1px; background: rgba(255,255,255,.08); margin: 10px 0; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding: 4px 10px; border-radius: 999px; background: rgba(106,166,255,.12); color: var(--text); font-size: 12px; }
+    .foot { margin-top: 10px; color: var(--muted); font-size: 12px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Gaussian Entropy & Cross-Entropy Visualizer</h1>
+    <p>
+      Toggle curves and pointwise contributions, and adjust the mean/variance of Gaussians
+      <span class="pill">P = 𝓝(μₚ, σₚ²)</span>
+      <span class="pill">Q = 𝓝(μ_q, σ_q²)</span>.
+      Entropies and cross-entropy are shown in <b>nats</b> and <b>bits</b>.
+    </p>
+
+    <div class="grid">
+      <!-- Controls -->
+      <div class="card">
+        <div class="row">
+          <label><input id="showP" type="checkbox" checked> Show P pdf</label>
+          <label><input id="showQ" type="checkbox" checked> Show Q pdf</label>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <label><input id="showEntP" type="checkbox" checked> Show entropy contribution of P: −p log p</label>
+        </div>
+        <div class="row">
+          <label><input id="showEntQ" type="checkbox"> Show entropy contribution of Q: −q log q</label>
+        </div>
+        <div class="row">
+          <label><input id="showCrossPQ" type="checkbox" checked> Show cross-entropy contribution: −p log q</label>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="ctrl">
+          <div class="hdr">
+            <div><b>μₚ</b> <span class="small">(mean of P)</span></div>
+            <div class="small" id="muPVal"></div>
+          </div>
+          <input id="muP" type="range" min="-5" max="5" step="0.01" value="0">
+        </div>
+
+        <div class="ctrl">
+          <div class="hdr">
+            <div><b>σₚ</b> <span class="small">(std dev of P)</span></div>
+            <div class="small" id="sigPVal"></div>
+          </div>
+          <input id="sigP" type="range" min="0.2" max="3" step="0.01" value="1">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="ctrl">
+          <div class="hdr">
+            <div><b>μ_q</b> <span class="small">(mean of Q)</span></div>
+            <div class="small" id="muQVal"></div>
+          </div>
+          <input id="muQ" type="range" min="-5" max="5" step="0.01" value="1">
+        </div>
+
+        <div class="ctrl">
+          <div class="hdr">
+            <div><b>σ_q</b> <span class="small">(std dev of Q)</span></div>
+            <div class="small" id="sigQVal"></div>
+          </div>
+          <input id="sigQ" type="range" min="0.2" max="3" step="0.01" value="1">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="nums">
+          <div class="box">
+            <div class="k">Entropy H(P)</div>
+            <div class="v" id="HP"></div>
+          </div>
+          <div class="box">
+            <div class="k">Entropy H(Q)</div>
+            <div class="v" id="HQ"></div>
+          </div>
+          <div class="box">
+            <div class="k">Cross-entropy H(P,Q) = −Eₚ[log q(X)]</div>
+            <div class="v" id="HPQ"></div>
+          </div>
+          <div class="box">
+            <div class="k">Gap: H(P,Q) − H(P) = D<sub>KL</sub>(P‖Q)</div>
+            <div class="v" id="DKL"></div>
+          </div>
+        </div>
+
+        <div class="foot">
+          Notes: Uses natural logs (nats). Bits = nats / ln(2). For Gaussians, entropies are analytic.
+        </div>
+      </div>
+
+      <!-- Plots -->
+      <div class="plots">
+        <div class="card">
+          <div class="small" style="margin-bottom:8px;">PDFs</div>
+          <div id="pdfPlot" class="plot"></div>
+        </div>
+
+        <div class="card">
+          <div class="small" style="margin-bottom:8px;">Pointwise contributions</div>
+          <div id="contribPlot" class="plot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ---------- Math helpers ----------
+  const LN2 = Math.log(2);
+
+  function gaussianPDF(x, mu, sigma) {
+    const z = (x - mu) / sigma;
+    return (1 / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * z * z);
+  }
+
+  // Entropy of N(mu, sigma^2): 0.5 * ln(2*pi*e*sigma^2)
+  function gaussianEntropyNats(sigma) {
+    return 0.5 * Math.log(2 * Math.PI * Math.E * sigma * sigma);
+  }
+
+  // Cross-entropy H(P,Q) where P=N(muP,sigP^2), Q=N(muQ,sigQ^2)
+  // H(P,Q) = 0.5*ln(2*pi*sigQ^2) + (sigP^2 + (muP-muQ)^2)/(2*sigQ^2)
+  function gaussianCrossEntropyNats(muP, sigP, muQ, sigQ) {
+    const term1 = 0.5 * Math.log(2 * Math.PI * sigQ * sigQ);
+    const term2 = (sigP*sigP + (muP - muQ)*(muP - muQ)) / (2 * sigQ * sigQ);
+    return term1 + term2;
+  }
+
+  function fmt(n) {
+    // nice fixed formatting
+    if (!isFinite(n)) return "∞";
+    const abs = Math.abs(n);
+    const digits = abs >= 10 ? 4 : abs >= 1 ? 5 : 6;
+    return n.toFixed(digits);
+  }
+
+  // ---------- DOM ----------
+  const els = {
+    muP: document.getElementById("muP"),
+    sigP: document.getElementById("sigP"),
+    muQ: document.getElementById("muQ"),
+    sigQ: document.getElementById("sigQ"),
+
+    muPVal: document.getElementById("muPVal"),
+    sigPVal: document.getElementById("sigPVal"),
+    muQVal: document.getElementById("muQVal"),
+    sigQVal: document.getElementById("sigQVal"),
+
+    showP: document.getElementById("showP"),
+    showQ: document.getElementById("showQ"),
+    showEntP: document.getElementById("showEntP"),
+    showEntQ: document.getElementById("showEntQ"),
+    showCrossPQ: document.getElementById("showCrossPQ"),
+
+    HP: document.getElementById("HP"),
+    HQ: document.getElementById("HQ"),
+    HPQ: document.getElementById("HPQ"),
+    DKL: document.getElementById("DKL"),
+  };
+
+  // ---------- Plot setup ----------
+  const baseLayout = {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(255,255,255,0.03)",
+    margin: { l: 55, r: 20, t: 10, b: 45 },
+    xaxis: { zeroline: false, gridcolor: "rgba(255,255,255,0.08)", tickcolor: "rgba(255,255,255,0.3)", color: "rgba(233,238,252,0.9)" },
+    yaxis: { zeroline: false, gridcolor: "rgba(255,255,255,0.08)", tickcolor: "rgba(255,255,255,0.3)", color: "rgba(233,238,252,0.9)" },
+    legend: { orientation: "h", y: 1.12, x: 0, font: { color: "rgba(233,238,252,0.9)" } },
+    font: { color: "rgba(233,238,252,0.9)" }
+  };
+
+  Plotly.newPlot("pdfPlot", [], { ...baseLayout, yaxis: { ...baseLayout.yaxis, title: { text: "density" } }, xaxis: { ...baseLayout.xaxis, title: { text: "x" } } }, { responsive: true });
+  Plotly.newPlot("contribPlot", [], { ...baseLayout, yaxis: { ...baseLayout.yaxis, title: { text: "contribution" } }, xaxis: { ...baseLayout.xaxis, title: { text: "x" } } }, { responsive: true });
+
+  // ---------- Update ----------
+  function update() {
+    const muP = parseFloat(els.muP.value);
+    const sigP = parseFloat(els.sigP.value);
+    const muQ = parseFloat(els.muQ.value);
+    const sigQ = parseFloat(els.sigQ.value);
+
+    els.muPVal.textContent = fmt(muP);
+    els.sigPVal.textContent = fmt(sigP);
+    els.muQVal.textContent = fmt(muQ);
+    els.sigQVal.textContent = fmt(sigQ);
+
+    // Choose x-range to cover both distributions well
+    const minMu = Math.min(muP, muQ);
+    const maxMu = Math.max(muP, muQ);
+    const maxSig = Math.max(sigP, sigQ);
+    const pad = 5 * maxSig;
+    const xMin = minMu - pad;
+    const xMax = maxMu + pad;
+
+    const N = 900;
+    const xs = new Array(N);
+    const p = new Array(N);
+    const q = new Array(N);
+
+    for (let i = 0; i < N; i++) {
+      const x = xMin + (xMax - xMin) * (i / (N - 1));
+      xs[i] = x;
+      p[i] = gaussianPDF(x, muP, sigP);
+      q[i] = gaussianPDF(x, muQ, sigQ);
+    }
+
+    // Pointwise contributions (nats)
+    const entP = p.map((pv) => (pv > 0 ? -pv * Math.log(pv) : 0));
+    const entQ = q.map((qv) => (qv > 0 ? -qv * Math.log(qv) : 0));
+    const crossPQ = p.map((pv, i) => (q[i] > 0 ? -pv * Math.log(q[i]) : Infinity)); // should be finite for Gaussians
+
+    // Analytic values (nats)
+    const HP_n = gaussianEntropyNats(sigP);
+    const HQ_n = gaussianEntropyNats(sigQ);
+    const HPQ_n = gaussianCrossEntropyNats(muP, sigP, muQ, sigQ);
+    const DKL_n = HPQ_n - HP_n; // equals KL(P||Q)
+
+    // Write numeric readouts (nats + bits)
+    function showBoth(nats) {
+      const bits = nats / LN2;
+      return `${fmt(nats)} nats  ·  ${fmt(bits)} bits`;
+    }
+    els.HP.textContent = showBoth(HP_n);
+    els.HQ.textContent = showBoth(HQ_n);
+    els.HPQ.textContent = showBoth(HPQ_n);
+    els.DKL.textContent = showBoth(DKL_n);
+
+    // Build traces
+    const pdfTraces = [];
+    if (els.showP.checked) {
+      pdfTraces.push({
+        x: xs, y: p, type: "scatter", mode: "lines",
+        name: "p(x)  (P pdf)", line: { width: 3 }
+      });
+    }
+    if (els.showQ.checked) {
+      pdfTraces.push({
+        x: xs, y: q, type: "scatter", mode: "lines",
+        name: "q(x)  (Q pdf)", line: { width: 3, dash: "dash" }
+      });
+    }
+
+    const contribTraces = [];
+    if (els.showEntP.checked) {
+      contribTraces.push({
+        x: xs, y: entP, type: "scatter", mode: "lines",
+        name: "−p(x) log p(x)", line: { width: 3 }
+      });
+    }
+    if (els.showEntQ.checked) {
+      contribTraces.push({
+        x: xs, y: entQ, type: "scatter", mode: "lines",
+        name: "−q(x) log q(x)", line: { width: 3, dash: "dot" }
+      });
+    }
+    if (els.showCrossPQ.checked) {
+      contribTraces.push({
+        x: xs, y: crossPQ, type: "scatter", mode: "lines",
+        name: "−p(x) log q(x)  (cross)", line: { width: 3, dash: "dash" }
+      });
+    }
+
+    Plotly.react("pdfPlot", pdfTraces, { ...baseLayout, xaxis: { ...baseLayout.xaxis, title: { text: "x" }, range: [xMin, xMax] }, yaxis: { ...baseLayout.yaxis, title: { text: "density" } } }, { responsive: true });
+    Plotly.react("contribPlot", contribTraces, { ...baseLayout, xaxis: { ...baseLayout.xaxis, title: { text: "x" }, range: [xMin, xMax] }, yaxis: { ...baseLayout.yaxis, title: { text: "contribution" } } }, { responsive: true });
+  }
+
+  // Hook up events
+  const inputs = [
+    els.muP, els.sigP, els.muQ, els.sigQ,
+    els.showP, els.showQ, els.showEntP, els.showEntQ, els.showCrossPQ
+  ];
+  inputs.forEach(el => el.addEventListener("input", update));
+  inputs.forEach(el => el.addEventListener("change", update));
+
+  // Initial render
+  update();
+</script>
+</body>
+</html>
